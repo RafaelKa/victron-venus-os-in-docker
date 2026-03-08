@@ -205,6 +205,42 @@ modify "Set /etc/venus/machine to '${MACHINE}'"
 mkdir -p "$STAGING_DIR/etc/venus"
 echo "$MACHINE" > "$STAGING_DIR/etc/venus/machine"
 
+# ── 11. Remove files not needed in a container ───────────────────────────────
+# These are safe to remove and don't affect downstream users deriving from
+# this image. They save ~70-80 MB.
+
+# Kernel image — container uses the host kernel
+if [[ -d "$STAGING_DIR/boot" ]]; then
+    BOOT_SIZE=$(du -sh "$STAGING_DIR/boot" | cut -f1)
+    rm -rf "$STAGING_DIR/boot"
+    mkdir -p "$STAGING_DIR/boot"
+    modify "Remove kernel image from /boot (was $BOOT_SIZE)"
+fi
+
+# Kernel modules — container uses host kernel modules
+if [[ -d "$STAGING_DIR/lib/modules" ]]; then
+    MODULES_SIZE=$(du -sh "$STAGING_DIR/lib/modules" | cut -f1)
+    rm -rf "$STAGING_DIR/lib/modules"
+    mkdir -p "$STAGING_DIR/lib/modules"
+    modify "Remove kernel modules from /lib/modules (was $MODULES_SIZE)"
+fi
+
+# Firmware — host kernel loads firmware, not the container
+if [[ -d "$STAGING_DIR/lib/firmware" ]]; then
+    FW_SIZE=$(du -sh "$STAGING_DIR/lib/firmware" | cut -f1)
+    rm -rf "$STAGING_DIR/lib/firmware"
+    mkdir -p "$STAGING_DIR/lib/firmware"
+    modify "Remove firmware from /lib/firmware (was $FW_SIZE)"
+fi
+
+# Python bytecode caches — regenerated automatically on first import
+PYC_COUNT=$(find "$STAGING_DIR" -name "*.pyc" -o -name "__pycache__" -type d 2>/dev/null | wc -l)
+if [[ "$PYC_COUNT" -gt 0 ]]; then
+    find "$STAGING_DIR" -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+    find "$STAGING_DIR" -name "*.pyc" -delete 2>/dev/null || true
+    modify "Remove Python bytecode caches ($PYC_COUNT entries)"
+fi
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 
 log ""
