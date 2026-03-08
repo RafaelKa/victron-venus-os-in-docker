@@ -5,8 +5,8 @@
 #
 # Includes:
 #   - All ports exposed
-#   - D-Bus socket shared with host for debugging
-#   - Container logs accessible
+#   - No auto-restart (for debugging)
+#   - D-Bus socket can be shared with host
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -15,17 +15,25 @@ services:
     image: ghcr.io/rafaelka/venus-os:latest-raspberrypi5
     container_name: venus-os-dev
     privileged: true
-    network_mode: host
     restart: "no"
+    ports:
+      - "80:80"         # Web GUI (HTTP)
+      - "443:443"       # Web GUI (HTTPS)
+      - "1883:1883"     # MQTT
+      - "9001:9001"     # MQTT WebSocket
+      - "2222:22"       # SSH
     volumes:
-      - venus-data:/data
-      - /dev/bus/usb:/dev/bus/usb
+      - ./venus-os-data:/data
       # Share D-Bus socket with host for debugging
       # - /var/run/dbus:/var/run/dbus
+    # Uncomment for device passthrough during development:
+    # devices:
+    #   - /dev/serial/by-id/usb-VictronEnergy_MK3-USB_Interface_HQ00000001-if00-port0:/dev/ttyUSBMK3
     environment:
       - VENUS_DISABLE_GUI=1
-      - VENUS_ENABLE_HARDWARE=0
+    networks:
+      - venus-net
 
-volumes:
-  venus-data:
-    name: venus-data-dev
+networks:
+  venus-net:
+    name: venus-net-dev

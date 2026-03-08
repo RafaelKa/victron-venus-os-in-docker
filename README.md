@@ -8,29 +8,39 @@ This lets you run Venus OS **alongside other applications** on the same hardware
 
 - Full Venus OS experience: web GUI, MQTT, D-Bus, all Venus services
 - Single-layer Docker image built from official Victron images
-- Hardware passthrough for Victron USB/serial devices (MPPTs, inverters, battery monitors)
+- **Interactive installer** — wizard for device selection, port mapping, and configuration
+- **Bridge networking** — run multiple Venus OS instances on the same host
+- **Explicit device passthrough** via stable `/dev/serial/by-id/` paths with friendly container names
+- **Bluetooth auto-detection** — no manual flags needed
+- Bind-mounted data directory for easy backup
 - Automated builds via GitHub Actions
 - Pre-built images on GitHub Container Registry
 
 ## Quick Start
 
-### Pull and run
+### Interactive installer (recommended)
 
 ```bash
-docker run -d \
-  --name venus-os \
-  --privileged \
-  --network host \
-  -v venus-data:/data \
-  -v /dev/bus/usb:/dev/bus/usb \
-  ghcr.io/rafaelka/venus-os:latest-raspberrypi5
+curl -fsSL https://raw.githubusercontent.com/RafaelKa/victron-venus-os-in-docker/main/install.sh -o install.sh
+bash install.sh
 ```
 
-### With Docker Compose
+The wizard will:
+1. Check prerequisites (Docker, Compose v2)
+2. Ask for an instance name (e.g., `boat-main`)
+3. Detect and list serial devices — you choose which to assign and pick friendly container names
+4. Detect Bluetooth adapters
+5. Configure port mappings (with conflict warnings)
+6. Generate `docker-compose.yml` and start instructions
+
+### Manual setup
 
 ```bash
-# Copy the example compose file
+# Copy an example compose file
 curl -O https://raw.githubusercontent.com/RafaelKa/victron-venus-os-in-docker/main/examples/docker-compose.yml
+
+# Create data directory
+mkdir venus-os-data
 
 # Start
 docker compose up -d
@@ -38,9 +48,9 @@ docker compose up -d
 
 ### Access
 
-- **Web GUI:** http://your-pi-ip/
-- **MQTT:** `your-pi-ip:1883`
-- **SSH:** `ssh root@your-pi-ip` (when using `--network host`)
+- **Web GUI:** http://your-host-ip/
+- **MQTT:** `your-host-ip:1883`
+- **SSH:** `ssh -p 2222 root@your-host-ip`
 
 ## Supported Platforms
 
@@ -55,13 +65,16 @@ docker compose up -d
 
 Control Venus services via environment variables:
 
-| Variable                | Default | Description                                          |
-|-------------------------|---------|------------------------------------------------------|
-| `VENUS_DISABLE_GUI`     | `0`     | Set to `1` to disable the Qt6 GUI (headless mode)    |
-| `VENUS_DISABLE_MQTT`    | `0`     | Set to `1` to disable MQTT broker and D-Bus bridge   |
-| `VENUS_DISABLE_NGINX`   | `0`     | Set to `1` to disable the web server                 |
-| `VENUS_DISABLE_SSH`     | `0`     | Set to `1` to disable SSH server                     |
-| `VENUS_ENABLE_HARDWARE` | `0`     | Set to `1` to enable Bluetooth and hardware services |
+| Variable              | Default | Description                                        |
+|-----------------------|---------|----------------------------------------------------|
+| `VENUS_DISABLE_GUI`   | `0`     | Set to `1` to disable the Qt6 GUI (headless mode)  |
+| `VENUS_DISABLE_MQTT`  | `0`     | Set to `1` to disable MQTT broker and D-Bus bridge |
+| `VENUS_DISABLE_NGINX` | `0`     | Set to `1` to disable the web server               |
+| `VENUS_DISABLE_SSH`   | `0`     | Set to `1` to disable SSH server                   |
+
+Bluetooth is auto-detected — if an HCI adapter is passed through, BT services are enabled automatically.
+
+See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for all options.
 
 ## Building from Source
 
@@ -95,8 +108,8 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for technical details.
 
 - [Architecture](docs/ARCHITECTURE.md) — Technical design and internals
 - [Building](docs/BUILDING.md) — Build instructions
-- [Running](docs/RUNNING.md) — Usage guide
-- [Hardware Setup](docs/HARDWARE-SETUP.md) — Connecting Victron devices
+- [Running](docs/RUNNING.md) — Usage guide and installer reference
+- [Hardware Setup](docs/HARDWARE-SETUP.md) — Connecting Victron devices via `/dev/serial/by-id/`
 - [Configuration](docs/CONFIGURATION.md) — Environment variables and settings
 - [Troubleshooting](docs/TROUBLESHOOTING.md) — Common issues
 

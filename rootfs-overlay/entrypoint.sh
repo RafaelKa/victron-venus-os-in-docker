@@ -9,7 +9,10 @@
 #   VENUS_DISABLE_MQTT=1      — Disable MQTT broker and bridge
 #   VENUS_DISABLE_NGINX=1     — Disable the web server
 #   VENUS_DISABLE_SSH=1       — Disable SSH server
-#   VENUS_ENABLE_HARDWARE=1   — Re-enable hardware services (Bluetooth, etc.)
+#
+# Bluetooth is auto-detected: if an HCI adapter is available inside the
+# container (passed via devices: in docker-compose.yml), Bluetooth services
+# are enabled automatically. No environment variable needed.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -38,18 +41,23 @@ fi
 # FlashMQ's D-Bus auth plugin requires /data/venus/unique-id to start.
 # On real hardware, venus-platform creates this. In Docker, we generate it
 # from the container's MAC address (same approach as venus-platform).
+#
+# We regenerate on every boot (not just first run) because the MAC-based ID
+# must match what Venus OS reports as system Serial. A stale fallback value
+# causes portal ID mismatches in the GUI v2.
 
-if [ ! -f /data/venus/unique-id ]; then
-    mkdir -p /data/venus
-    # Use the first non-loopback interface MAC, stripped of colons
-    UNIQUE_ID=$(ip link show 2>/dev/null | grep -A1 -E "^[0-9]+:" | grep "link/ether" | head -1 | awk '{print $2}' | tr -d ':')
-    if [ -n "$UNIQUE_ID" ]; then
-        echo "$UNIQUE_ID" > /data/venus/unique-id
-        echo "[entrypoint] Generated VRM unique ID: $UNIQUE_ID"
-    else
-        # Fallback: use machine-id
+mkdir -p /data/venus
+UNIQUE_ID=$(ip link show 2>/dev/null | grep -A1 -E "^[0-9]+:" | grep "link/ether" | head -1 | awk '{print $2}' | tr -d ':')
+if [ -n "$UNIQUE_ID" ]; then
+    echo "$UNIQUE_ID" > /data/venus/unique-id
+    echo "[entrypoint] VRM unique ID: $UNIQUE_ID"
+else
+    # MAC not available — keep existing file or write fallback
+    if [ ! -f /data/venus/unique-id ]; then
         head -c 12 /etc/machine-id > /data/venus/unique-id 2>/dev/null || echo "dockervenus0" > /data/venus/unique-id
-        echo "[entrypoint] Generated fallback VRM unique ID."
+        echo "[entrypoint] VRM unique ID: fallback (no MAC detected)"
+    else
+        echo "[entrypoint] VRM unique ID: $(cat /data/venus/unique-id) (kept existing, no MAC detected)"
     fi
 fi
 
@@ -170,14 +178,40 @@ if [ "${VENUS_DISABLE_SSH:-0}" = "1" ]; then
     disable_service "sshd"
 fi
 
-# Hardware services — re-enable if explicitly requested
-if [ "${VENUS_ENABLE_HARDWARE:-0}" = "1" ]; then
-    echo "[entrypoint] Enabling hardware services..."
+# Connman — always disabled (Docker manages networking)
+
+# ── Bluetooth auto-detection ─────────────────────────────────────────────────
+# If a Bluetooth HCI adapter is available inside the container, enable
+# Bluetooth services automatically. No environment variable needed.
+
+BT_DETECTED=false
+for hci in /sys/class/bluetooth/hci*; do
+    if [ -e "$hci" ]; then
+        BT_DETECTED=true
+        break
+    fi
+done
+
+if [ "$BT_DETECTED" = true ]; then
+    echo "[entrypoint] Bluetooth adapter detected — enabling BT services..."
     enable_service "start-bluetooth"
     enable_service "bluetooth"
     enable_service "vesmart-server"
     enable_service "dbus-ble-sensors"
-    enable_service "connman"
+else
+    echo "[entrypoint] No Bluetooth adapter detected — BT services stay disabled."
+fi
+
+# ── Log serial devices ───────────────────────────────────────────────────────
+
+if [ -d /dev/serial/by-id ] && [ -n "$(ls -A /dev/serial/by-id/ 2>/dev/null)" ]; then
+    echo "[entrypoint] Serial devices available:"
+    for dev in /dev/serial/by-id/*; do
+        real_dev=$(readlink -f "$dev" 2>/dev/null || echo "$dev")
+        echo "[entrypoint]   $(basename "$dev") -> $real_dev"
+    done
+else
+    echo "[entrypoint] No serial devices in /dev/serial/by-id/"
 fi
 
 # ── Show service summary ──────────────────────────────────────────────────────

@@ -3,7 +3,7 @@
 # Usage:
 #   docker compose -f docker-compose.headless.yml up -d
 #
-# Access the web GUI at http://<your-pi-ip>/
+# Access the web GUI at http://<your-host-ip>/
 # MQTT available on port 1883.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
@@ -15,18 +15,21 @@ services:
     privileged: true
     restart: unless-stopped
     ports:
-      - "80:80"         # Web GUI
+      - "80:80"         # Web GUI (HTTP)
       - "443:443"       # Web GUI (HTTPS)
       - "1883:1883"     # MQTT
       - "9001:9001"     # MQTT WebSocket
       - "2222:22"       # SSH (mapped to avoid conflict with host)
     volumes:
-      - venus-data:/data
-      - /dev/bus/usb:/dev/bus/usb
+      - ./venus-os-data:/data
+    # Uncomment and adjust for your Victron serial devices:
+    # devices:
+    #   - /dev/serial/by-id/usb-VictronEnergy_MK3-USB_Interface_HQ00000001-if00-port0:/dev/ttyUSBMK3
     environment:
       - VENUS_DISABLE_GUI=1
-      - VENUS_ENABLE_HARDWARE=1
+    networks:
+      - venus-net
 
-volumes:
-  venus-data:
-    name: venus-data
+networks:
+  venus-net:
+    name: venus-net
