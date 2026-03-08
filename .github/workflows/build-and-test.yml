@@ -1,4 +1,5 @@
 # Build and test Venus OS Docker image on native ARM64 runner.
+# Builds both standard and large image variants.
 # Triggered on push to main and pull requests.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
@@ -24,6 +25,11 @@ jobs:
     permissions:
       contents: read
 
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [standard, large]
+
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -32,18 +38,18 @@ jobs:
         uses: actions/cache@v5
         with:
           path: build/downloads/
-          key: venus-image-${{ env.MACHINE }}-${{ env.FEED }}
+          key: venus-image-${{ env.MACHINE }}-${{ matrix.variant }}-${{ env.FEED }}
           restore-keys: |
-            venus-image-${{ env.MACHINE }}-
+            venus-image-${{ env.MACHINE }}-${{ matrix.variant }}-
 
       - name: Download Venus OS image
         run: |
           chmod +x scripts/*.sh
-          sudo bash scripts/download-image.sh --machine "$MACHINE" --feed "$FEED"
+          sudo bash scripts/download-image.sh --machine "$MACHINE" --feed "$FEED" --variant "${{ matrix.variant }}"
 
       - name: Extract rootfs
         run: |
-          sudo bash scripts/extract-rootfs.sh --machine "$MACHINE"
+          sudo bash scripts/extract-rootfs.sh --machine "$MACHINE" --variant "${{ matrix.variant }}"
 
       - name: Modify rootfs for container
         run: |
@@ -56,18 +62,26 @@ jobs:
 
       - name: Build Docker image
         run: |
+          VARIANT_SUFFIX=""
+          if [[ "${{ matrix.variant }}" == "large" ]]; then
+            VARIANT_SUFFIX="-large"
+          fi
           docker build \
             -f docker/Dockerfile \
-            -t "$IMAGE_REGISTRY/$IMAGE_OWNER/$IMAGE_NAME:test-$MACHINE" \
+            -t "$IMAGE_REGISTRY/$IMAGE_OWNER/$IMAGE_NAME:test-${MACHINE}${VARIANT_SUFFIX}" \
             --build-arg ROOTFS_TAR=rootfs.tar \
             build/output/
 
       - name: Start container
         run: |
+          VARIANT_SUFFIX=""
+          if [[ "${{ matrix.variant }}" == "large" ]]; then
+            VARIANT_SUFFIX="-large"
+          fi
           docker run -d \
             --name venus-test \
             --privileged \
-            "$IMAGE_REGISTRY/$IMAGE_OWNER/$IMAGE_NAME:test-$MACHINE"
+            "$IMAGE_REGISTRY/$IMAGE_OWNER/$IMAGE_NAME:test-${MACHINE}${VARIANT_SUFFIX}"
 
           echo "Waiting for Venus OS to initialize..."
           sleep 20
@@ -89,7 +103,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v6
         with:
-          name: test-results-${{ env.MACHINE }}
+          name: test-results-${{ env.MACHINE }}-${{ matrix.variant }}
           path: build/test-results/
           retention-days: 7
 

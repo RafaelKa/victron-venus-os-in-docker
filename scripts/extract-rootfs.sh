@@ -19,16 +19,18 @@ while [[ $# -gt 0 ]]; do
         --image)   IMAGE_FILE="$2"; shift 2 ;;
         --output)  OUTPUT_DIR_OVERRIDE="$2"; shift 2 ;;
         --machine) MACHINE="$2"; shift 2 ;;
+        --variant) IMAGE_VARIANT="$2"; shift 2 ;;
         --help|-h)
-            echo "Usage: $0 [--image FILE] [--output DIR] [--machine NAME]"
+            echo "Usage: $0 [--image FILE] [--output DIR] [--machine NAME] [--variant TYPE]"
             echo ""
             echo "Extract the rootfs partition from a Venus OS .wic(.gz) image."
             echo "Requires root privileges for loopback mount."
             echo ""
             echo "Options:"
-            echo "  --image FILE     Path to .wic or .wic.gz file (default: build/downloads/venus-image-MACHINE.wic.gz)"
-            echo "  --output DIR     Output staging directory (default: build/rootfs-staging/)"
-            echo "  --machine NAME   Machine name, used for default image path (default: raspberrypi5)"
+            echo "  --image FILE      Path to .wic or .wic.gz file (auto-detected from machine+variant)"
+            echo "  --output DIR      Output staging directory (default: build/rootfs-staging/)"
+            echo "  --machine NAME    Machine name (default: raspberrypi5)"
+            echo "  --variant TYPE    Image variant: standard|large (default: standard)"
             exit 0
             ;;
         *) die "Unknown argument: $1" ;;
@@ -44,7 +46,7 @@ ensure_command losetup
 ensure_dirs
 
 if [[ -z "$IMAGE_FILE" ]]; then
-    IMAGE_FILE="${DOWNLOAD_DIR}/venus-image-${MACHINE}.wic.gz"
+    IMAGE_FILE="${DOWNLOAD_DIR}/$(get_image_filename "$MACHINE" "$IMAGE_VARIANT")"
 fi
 
 if [[ -n "$OUTPUT_DIR_OVERRIDE" ]]; then

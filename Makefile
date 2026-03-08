@@ -12,6 +12,7 @@
 # Variables (override on command line):
 #   MACHINE=raspberrypi5           Target machine
 #   FEED=release                   Venus OS feed (release|candidate|testing|develop)
+#   IMAGE_VARIANT=standard         Image variant (standard|large)
 #   VENUS_VERSION=latest           Venus OS version for tagging
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
@@ -20,6 +21,7 @@
 
 MACHINE        ?= raspberrypi5
 FEED           ?= release
+IMAGE_VARIANT  ?= standard
 VENUS_VERSION  ?= latest
 IMAGE_REGISTRY ?= ghcr.io
 IMAGE_OWNER    ?= rafaelka
@@ -34,11 +36,12 @@ SCRIPTS_DIR    := scripts
 TESTS_DIR      := tests
 DOCKER_DIR     := docker
 
-IMAGE_TAG      := $(IMAGE_REGISTRY)/$(IMAGE_OWNER)/$(IMAGE_NAME):latest-$(MACHINE)
+VARIANT_SUFFIX := $(if $(filter large,$(IMAGE_VARIANT)),-large,)
+IMAGE_TAG      := $(IMAGE_REGISTRY)/$(IMAGE_OWNER)/$(IMAGE_NAME):latest-$(MACHINE)$(VARIANT_SUFFIX)
 CONTAINER_NAME := venus-os-test
 
 # Export for scripts
-export MACHINE FEED VENUS_VERSION IMAGE_REGISTRY IMAGE_OWNER IMAGE_NAME
+export MACHINE FEED IMAGE_VARIANT VENUS_VERSION IMAGE_REGISTRY IMAGE_OWNER IMAGE_NAME
 
 # ── Targets ────────────────────────────────────────────────────────────────────
 
@@ -51,7 +54,7 @@ help: ## Show this help
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  %-15s %s\n", $$1, $$2}'
 	@echo ""
 	@echo "Variables:"
-	@echo "  MACHINE=$(MACHINE)  FEED=$(FEED)  VENUS_VERSION=$(VENUS_VERSION)"
+	@echo "  MACHINE=$(MACHINE)  FEED=$(FEED)  IMAGE_VARIANT=$(IMAGE_VARIANT)  VENUS_VERSION=$(VENUS_VERSION)"
 
 build: download extract modify package ## Full build pipeline (requires root)
 	@echo ""
@@ -60,10 +63,10 @@ build: download extract modify package ## Full build pipeline (requires root)
 
 download: ## Download Venus OS image from Victron
 	@chmod +x $(SCRIPTS_DIR)/*.sh
-	bash $(SCRIPTS_DIR)/download-image.sh --machine $(MACHINE) --feed $(FEED)
+	bash $(SCRIPTS_DIR)/download-image.sh --machine $(MACHINE) --feed $(FEED) --variant $(IMAGE_VARIANT)
 
 extract: ## Extract rootfs from .wic image (requires root)
-	bash $(SCRIPTS_DIR)/extract-rootfs.sh --machine $(MACHINE)
+	bash $(SCRIPTS_DIR)/extract-rootfs.sh --machine $(MACHINE) --variant $(IMAGE_VARIANT)
 
 modify: ## Apply container-compatibility patches to rootfs
 	bash $(SCRIPTS_DIR)/modify-rootfs.sh --rootfs $(STAGING_DIR) --machine $(MACHINE)

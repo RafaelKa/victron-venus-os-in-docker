@@ -1,4 +1,5 @@
 # Build, test, and push Venus OS Docker image to ghcr.io on release tags.
+# Builds both standard and large image variants.
 # Uses native ARM64 runner — no QEMU emulation needed.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
@@ -23,6 +24,11 @@ jobs:
       contents: write
       packages: write
 
+    strategy:
+      fail-fast: true
+      matrix:
+        variant: [standard, large]
+
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -34,19 +40,28 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Version: $VERSION"
 
+      - name: Set variant suffix
+        id: variant
+        run: |
+          SUFFIX=""
+          if [[ "${{ matrix.variant }}" == "large" ]]; then
+            SUFFIX="-large"
+          fi
+          echo "suffix=$SUFFIX" >> "$GITHUB_OUTPUT"
+
       - name: Cache Venus OS image download
         uses: actions/cache@v5
         with:
           path: build/downloads/
-          key: venus-image-${{ env.MACHINE }}-${{ env.FEED }}
+          key: venus-image-${{ env.MACHINE }}-${{ matrix.variant }}-${{ env.FEED }}
 
       - name: Download Venus OS image
         run: |
           chmod +x scripts/*.sh
-          sudo bash scripts/download-image.sh --machine "$MACHINE" --feed "$FEED"
+          sudo bash scripts/download-image.sh --machine "$MACHINE" --feed "$FEED" --variant "${{ matrix.variant }}"
 
       - name: Extract rootfs
-        run: sudo bash scripts/extract-rootfs.sh --machine "$MACHINE"
+        run: sudo bash scripts/extract-rootfs.sh --machine "$MACHINE" --variant "${{ matrix.variant }}"
 
       - name: Modify rootfs for container
         run: sudo bash scripts/modify-rootfs.sh --rootfs build/rootfs-staging --machine "$MACHINE"
@@ -57,20 +72,22 @@ jobs:
       - name: Build Docker image
         run: |
           VERSION="${{ steps.version.outputs.version }}"
+          SUFFIX="${{ steps.variant.outputs.suffix }}"
           docker build \
             -f docker/Dockerfile \
-            -t "$IMAGE_REGISTRY/$IMAGE_OWNER/$IMAGE_NAME:v${VERSION}-$MACHINE" \
-            -t "$IMAGE_REGISTRY/$IMAGE_OWNER/$IMAGE_NAME:latest-$MACHINE" \
+            -t "$IMAGE_REGISTRY/$IMAGE_OWNER/$IMAGE_NAME:v${VERSION}-${MACHINE}${SUFFIX}" \
+            -t "$IMAGE_REGISTRY/$IMAGE_OWNER/$IMAGE_NAME:latest-${MACHINE}${SUFFIX}" \
             --build-arg ROOTFS_TAR=rootfs.tar \
             build/output/
 
       - name: Run tests
         run: |
           VERSION="${{ steps.version.outputs.version }}"
+          SUFFIX="${{ steps.variant.outputs.suffix }}"
           docker run -d \
             --name venus-test \
             --privileged \
-            "$IMAGE_REGISTRY/$IMAGE_OWNER/$IMAGE_NAME:v${VERSION}-$MACHINE"
+            "$IMAGE_REGISTRY/$IMAGE_OWNER/$IMAGE_NAME:v${VERSION}-${MACHINE}${SUFFIX}"
 
           echo "Waiting for Venus OS to initialize..."
           sleep 20
@@ -90,27 +107,51 @@ jobs:
       - name: Push Docker image
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          docker push "$IMAGE_REGISTRY/$IMAGE_OWNER/$IMAGE_NAME:v${VERSION}-$MACHINE"
-          docker push "$IMAGE_REGISTRY/$IMAGE_OWNER/$IMAGE_NAME:latest-$MACHINE"
+          SUFFIX="${{ steps.variant.outputs.suffix }}"
+          docker push "$IMAGE_REGISTRY/$IMAGE_OWNER/$IMAGE_NAME:v${VERSION}-${MACHINE}${SUFFIX}"
+          docker push "$IMAGE_REGISTRY/$IMAGE_OWNER/$IMAGE_NAME:latest-${MACHINE}${SUFFIX}"
+
+  create-release:
+    needs: release
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
           body: |
-            ## Venus OS Docker Image
+            ## Venus OS Docker Images
 
             **Machine:** `${{ env.MACHINE }}`
             **Feed:** `${{ env.FEED }}`
+            **Variants:** standard, large (includes Node-RED & Signal K)
 
             ### Pull the image
+
+            **Standard:**
             ```bash
             docker pull ghcr.io/${{ env.IMAGE_OWNER }}/${{ env.IMAGE_NAME }}:v${{ steps.version.outputs.version }}-${{ env.MACHINE }}
             ```
 
+            **Large (Node-RED, Signal K):**
+            ```bash
+            docker pull ghcr.io/${{ env.IMAGE_OWNER }}/${{ env.IMAGE_NAME }}:v${{ steps.version.outputs.version }}-${{ env.MACHINE }}-large
+            ```
+
             ### Quick start
             ```bash
-            docker run -d --privileged --network host \
-              -v venus-data:/data \
-              ghcr.io/${{ env.IMAGE_OWNER }}/${{ env.IMAGE_NAME }}:v${{ steps.version.outputs.version }}-${{ env.MACHINE }}
+            curl -fsSL https://raw.githubusercontent.com/RafaelKa/victron-venus-os-in-docker/main/install.sh -o install.sh
+            bash install.sh
             ```

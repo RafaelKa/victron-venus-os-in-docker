@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # build-docker-image.sh — Full pipeline: download → extract → modify → build Docker image.
 #
-# Usage: ./build-docker-image.sh [--machine raspberrypi5] [--feed release] [--tag TAG]
+# Usage: ./build-docker-image.sh [--machine raspberrypi5] [--feed release] [--variant standard] [--tag TAG]
 #
 # Requires root privileges (for rootfs extraction via loopback mount).
 #
@@ -19,6 +19,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --machine)       MACHINE="$2"; shift 2 ;;
         --feed)          FEED="$2"; shift 2 ;;
+        --variant)       IMAGE_VARIANT="$2"; shift 2 ;;
         --tag)           CUSTOM_TAG="$2"; shift 2 ;;
         --skip-download) SKIP_DOWNLOAD=1; shift ;;
         --skip-extract)  SKIP_EXTRACT=1; shift ;;
@@ -31,6 +32,7 @@ while [[ $# -gt 0 ]]; do
             echo "Options:"
             echo "  --machine NAME     Target machine (default: raspberrypi5)"
             echo "  --feed FEED        Release feed (default: release)"
+            echo "  --variant TYPE     Image variant: standard|large (default: standard)"
             echo "  --tag TAG          Custom Docker image tag"
             echo "  --skip-download    Skip download step (use existing image)"
             echo "  --skip-extract     Skip extract step (use existing rootfs staging)"
@@ -53,7 +55,7 @@ SCRIPTS_DIR="$(dirname "$0")"
 
 if [[ $SKIP_DOWNLOAD -eq 0 ]]; then
     log "═══ Step 1/4: Downloading Venus OS image ═══"
-    bash "$SCRIPTS_DIR/download-image.sh" --machine "$MACHINE" --feed "$FEED"
+    bash "$SCRIPTS_DIR/download-image.sh" --machine "$MACHINE" --feed "$FEED" --variant "$IMAGE_VARIANT"
 else
     log "═══ Step 1/4: Skipping download (--skip-download) ═══"
 fi
@@ -62,7 +64,7 @@ fi
 
 if [[ $SKIP_EXTRACT -eq 0 ]]; then
     log "═══ Step 2/4: Extracting rootfs ═══"
-    bash "$SCRIPTS_DIR/extract-rootfs.sh" --machine "$MACHINE"
+    bash "$SCRIPTS_DIR/extract-rootfs.sh" --machine "$MACHINE" --variant "$IMAGE_VARIANT"
 else
     log "═══ Step 2/4: Skipping extraction (--skip-extract) ═══"
 fi
@@ -87,7 +89,7 @@ log "Rootfs tarball size: $TARBALL_SIZE"
 if [[ -n "$CUSTOM_TAG" ]]; then
     DOCKER_TAG="$CUSTOM_TAG"
 else
-    DOCKER_TAG="$(get_docker_tag "$VENUS_VERSION" "$MACHINE")"
+    DOCKER_TAG="$(get_docker_tag "$VENUS_VERSION" "$MACHINE" "$IMAGE_VARIANT")"
 fi
 
 # Build Docker image using the Dockerfile
@@ -98,8 +100,8 @@ docker build \
     --build-arg ROOTFS_TAR="rootfs.tar" \
     "$OUTPUT_DIR"
 
-# Also tag as latest for this machine
-LATEST_TAG="${IMAGE_REGISTRY}/${IMAGE_OWNER}/${IMAGE_NAME}:latest-${MACHINE}"
+# Also tag as latest for this machine+variant
+LATEST_TAG="$(get_docker_tag "latest" "$MACHINE" "$IMAGE_VARIANT")"
 if [[ "$DOCKER_TAG" != "$LATEST_TAG" ]]; then
     docker tag "$DOCKER_TAG" "$LATEST_TAG"
     log "Also tagged as: $LATEST_TAG"
@@ -114,6 +116,7 @@ log "═════════════════════════
 log "  Build complete!"
 log "  Image:    $DOCKER_TAG"
 log "  Machine:  $MACHINE"
+log "  Variant:  $IMAGE_VARIANT"
 log "  Feed:     $FEED"
 log "  Size:     $IMAGE_SIZE"
 log "════════════════════════════════════════════════════"
