@@ -30,7 +30,7 @@ docker run -d \
 
 ```bash
 # Copy the example compose file
-curl -O https://raw.githubusercontent.com/RafaelKa/victron-venus-os-docker/main/examples/docker-compose.yml
+curl -O https://raw.githubusercontent.com/RafaelKa/victron-venus-os-in-docker/main/examples/docker-compose.yml
 
 # Start
 docker compose up -d
@@ -44,24 +44,24 @@ docker compose up -d
 
 ## Supported Platforms
 
-| Platform | Architecture | Status |
-|----------|-------------|--------|
-| Raspberry Pi 5 | aarch64 | Supported |
-| Raspberry Pi 4 | aarch64 | Planned |
-| Raspberry Pi 2 | armv7 | Planned |
-| BeagleBone Black | armv7 | Planned |
+| Platform         | Architecture | Status    |
+|------------------|--------------|-----------|
+| Raspberry Pi 5   | aarch64      | Supported |
+| Raspberry Pi 4   | aarch64      | Planned   |
+| Raspberry Pi 2   | armv7        | Planned   |
+| BeagleBone Black | armv7        | Planned   |
 
 ## Configuration
 
 Control Venus services via environment variables:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `VENUS_DISABLE_GUI` | `0` | Set to `1` to disable the Qt6 GUI (headless mode) |
-| `VENUS_DISABLE_MQTT` | `0` | Set to `1` to disable MQTT broker and D-Bus bridge |
-| `VENUS_DISABLE_NGINX` | `0` | Set to `1` to disable the web server |
-| `VENUS_DISABLE_SSH` | `0` | Set to `1` to disable SSH server |
-| `VENUS_ENABLE_HARDWARE` | `0` | Set to `1` to enable Bluetooth and hardware services |
+| Variable                | Default | Description                                          |
+|-------------------------|---------|------------------------------------------------------|
+| `VENUS_DISABLE_GUI`     | `0`     | Set to `1` to disable the Qt6 GUI (headless mode)    |
+| `VENUS_DISABLE_MQTT`    | `0`     | Set to `1` to disable MQTT broker and D-Bus bridge   |
+| `VENUS_DISABLE_NGINX`   | `0`     | Set to `1` to disable the web server                 |
+| `VENUS_DISABLE_SSH`     | `0`     | Set to `1` to disable SSH server                     |
+| `VENUS_ENABLE_HARDWARE` | `0`     | Set to `1` to enable Bluetooth and hardware services |
 
 ## Building from Source
 

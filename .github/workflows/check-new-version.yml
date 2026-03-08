@@ -1,0 +1,91 @@
+# Periodically check for new Venus OS releases.
+# If a new version is found, opens an issue to trigger a build.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+name: Check for New Venus OS Version
+
+on:
+  schedule:
+    # Run weekly on Monday at 06:00 UTC
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+env:
+  MACHINE: raspberrypi5
+  FEED: release
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Check for new Venus OS version
+        id: check
+        run: |
+          chmod +x scripts/*.sh
+
+          IMAGE_URL="https://updates.victronenergy.com/feeds/venus/$FEED/images/$MACHINE/"
+
+          # Get the Last-Modified header of the image (indicates when it was last updated)
+          REMOTE_DATE=$(curl -sI -L "${IMAGE_URL}venus-image-${MACHINE}.wic.gz" | \
+            grep -i "last-modified" | sed 's/last-modified: //i' | tr -d '\r')
+
+          echo "Remote image date: $REMOTE_DATE"
+
+          # Compare with our tracked version
+          TRACKED_DATE=""
+          if [[ -f config/last-checked.txt ]]; then
+            TRACKED_DATE=$(cat config/last-checked.txt)
+          fi
+
+          echo "Tracked date: $TRACKED_DATE"
+
+          if [[ "$REMOTE_DATE" != "$TRACKED_DATE" && -n "$REMOTE_DATE" ]]; then
+            echo "new_version=true" >> "$GITHUB_OUTPUT"
+            echo "remote_date=$REMOTE_DATE" >> "$GITHUB_OUTPUT"
+            echo "New version detected!"
+          else
+            echo "new_version=false" >> "$GITHUB_OUTPUT"
+            echo "No new version."
+          fi
+
+      - name: Create issue for new version
+        if: steps.check.outputs.new_version == 'true'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const title = `New Venus OS image available (${process.env.MACHINE})`;
+            const body = `A new Venus OS image has been detected on the Victron update server.
+
+            **Machine:** \`${process.env.MACHINE}\`
+            **Feed:** \`${process.env.FEED}\`
+            **Remote date:** ${process.env.REMOTE_DATE || 'unknown'}
+
+            Please create a new release tag to trigger a build.`;
+
+            // Check if a similar issue already exists
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'new-version',
+            });
+
+            const existing = issues.data.find(i => i.title.includes(process.env.MACHINE));
+            if (!existing) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: title,
+                body: body,
+                labels: ['new-version'],
+              });
+            }
+        env:
+          REMOTE_DATE: ${{ steps.check.outputs.remote_date }}

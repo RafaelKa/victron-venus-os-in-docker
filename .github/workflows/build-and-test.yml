@@ -1,0 +1,100 @@
+# Build and test Venus OS Docker image on native ARM64 runner.
+# Triggered on push to main and pull requests.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+name: Build and Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  MACHINE: raspberrypi5
+  FEED: release
+  IMAGE_REGISTRY: ghcr.io
+  IMAGE_OWNER: rafaelka
+  IMAGE_NAME: venus-os
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Cache Venus OS image download
+        uses: actions/cache@v5
+        with:
+          path: build/downloads/
+          key: venus-image-${{ env.MACHINE }}-${{ env.FEED }}
+          restore-keys: |
+            venus-image-${{ env.MACHINE }}-
+
+      - name: Download Venus OS image
+        run: |
+          chmod +x scripts/*.sh
+          sudo bash scripts/download-image.sh --machine "$MACHINE" --feed "$FEED"
+
+      - name: Extract rootfs
+        run: |
+          sudo bash scripts/extract-rootfs.sh --machine "$MACHINE"
+
+      - name: Modify rootfs for container
+        run: |
+          sudo bash scripts/modify-rootfs.sh --rootfs build/rootfs-staging --machine "$MACHINE"
+
+      - name: Package rootfs
+        run: |
+          sudo tar -cf build/output/rootfs.tar -C build/rootfs-staging .
+          ls -lh build/output/rootfs.tar
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            -f docker/Dockerfile \
+            -t "$IMAGE_REGISTRY/$IMAGE_OWNER/$IMAGE_NAME:test-$MACHINE" \
+            --build-arg ROOTFS_TAR=rootfs.tar \
+            build/output/
+
+      - name: Start container
+        run: |
+          docker run -d \
+            --name venus-test \
+            --privileged \
+            "$IMAGE_REGISTRY/$IMAGE_OWNER/$IMAGE_NAME:test-$MACHINE"
+
+          echo "Waiting for Venus OS to initialize..."
+          sleep 20
+
+      - name: Run tests
+        run: |
+          chmod +x tests/*.sh
+          bash tests/run-all-tests.sh venus-test
+
+      - name: Collect container logs (on failure)
+        if: failure()
+        run: |
+          sudo mkdir -p build/test-results
+          docker logs venus-test | sudo tee build/test-results/container.log > /dev/null 2>&1
+          docker exec venus-test sh -c 'svstat /service/* 2>/dev/null' | sudo tee build/test-results/services.log > /dev/null 2>&1 || true
+          sudo chmod -R a+r build/test-results/
+
+      - name: Upload test artifacts
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: test-results-${{ env.MACHINE }}
+          path: build/test-results/
+          retention-days: 7
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker stop venus-test 2>/dev/null || true
+          docker rm venus-test 2>/dev/null || true

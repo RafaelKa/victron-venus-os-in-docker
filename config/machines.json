@@ -1,0 +1,63 @@
+{
+  "machines": {
+    "raspberrypi5": {
+      "architecture": "linux/arm64",
+      "description": "Raspberry Pi 5 (64-bit)",
+      "phase": 1,
+      "enabled": true,
+      "notes": "Primary development target"
+    },
+    "raspberrypi4": {
+      "architecture": "linux/arm64",
+      "description": "Raspberry Pi 4 (64-bit)",
+      "phase": 2,
+      "enabled": false,
+      "notes": ""
+    },
+    "raspberrypi2": {
+      "architecture": "linux/arm/v7",
+      "description": "Raspberry Pi 2 (32-bit)",
+      "phase": 2,
+      "enabled": false,
+      "notes": ""
+    },
+    "beaglebone": {
+      "architecture": "linux/arm/v7",
+      "description": "BeagleBone Black",
+      "phase": 3,
+      "enabled": false,
+      "notes": ""
+    },
+    "einstein": {
+      "architecture": "linux/arm/v7",
+      "description": "Victron Einstein (Allwinner/sunxi)",
+      "phase": 3,
+      "enabled": false,
+      "notes": ""
+    },
+    "ekrano": {
+      "architecture": "linux/arm64",
+      "description": "Victron Ekrano GX",
+      "phase": 3,
+      "enabled": false,
+      "notes": ""
+    },
+    "nanopi": {
+      "architecture": "linux/arm64",
+      "description": "NanoPi",
+      "phase": 3,
+      "enabled": false,
+      "notes": ""
+    },
+    "ccgx": {
+      "architecture": "linux/arm/v7",
+      "description": "Color Control GX",
+      "phase": 3,
+      "enabled": false,
+      "notes": "Legacy device, limited resources"
+    }
+  },
+  "feeds": ["release", "candidate", "testing", "develop"],
+  "default_feed": "release",
+  "update_base_url": "https://updates.victronenergy.com/feeds/venus"
+}

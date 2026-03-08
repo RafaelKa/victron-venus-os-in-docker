@@ -1,0 +1,34 @@
+# Venus OS in Docker — Standard setup with hardware passthrough.
+#
+# Usage:
+#   docker compose up -d
+#
+# This configuration runs Venus OS with full hardware access for
+# connecting Victron devices via USB/serial.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+services:
+  venus-os:
+    image: ghcr.io/rafaelka/venus-os:latest-raspberrypi5
+    container_name: venus-os
+    privileged: true
+    network_mode: host
+    restart: unless-stopped
+    volumes:
+      - venus-data:/data
+      # Pass through USB devices for Victron hardware
+      - /dev/bus/usb:/dev/bus/usb
+    # Uncomment and adjust for specific serial devices:
+    # devices:
+    #   - /dev/ttyUSB0:/dev/ttyUSB0
+    #   - /dev/ttyACM0:/dev/ttyACM0
+    environment:
+      # Set to 1 to disable the Qt6 GUI (headless mode)
+      - VENUS_DISABLE_GUI=0
+      # Set to 1 to re-enable Bluetooth and other hardware services
+      - VENUS_ENABLE_HARDWARE=1
+
+volumes:
+  venus-data:
+    name: venus-data

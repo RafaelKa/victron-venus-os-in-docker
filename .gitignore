@@ -1,0 +1,22 @@
+# Build artifacts
+build/
+*.tar
+*.tar.gz
+*.wic
+*.wic.gz
+*.swu
+rootfs-staging/
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Victron source repos (reference only, not part of this project)
+/victron_sources/

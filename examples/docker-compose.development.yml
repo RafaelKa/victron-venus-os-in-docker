@@ -1,0 +1,31 @@
+# Venus OS in Docker — Development / debugging setup.
+#
+# Usage:
+#   docker compose -f docker-compose.development.yml up -d
+#
+# Includes:
+#   - All ports exposed
+#   - D-Bus socket shared with host for debugging
+#   - Container logs accessible
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+services:
+  venus-os:
+    image: ghcr.io/rafaelka/venus-os:latest-raspberrypi5
+    container_name: venus-os-dev
+    privileged: true
+    network_mode: host
+    restart: "no"
+    volumes:
+      - venus-data:/data
+      - /dev/bus/usb:/dev/bus/usb
+      # Share D-Bus socket with host for debugging
+      # - /var/run/dbus:/var/run/dbus
+    environment:
+      - VENUS_DISABLE_GUI=1
+      - VENUS_ENABLE_HARDWARE=0
+
+volumes:
+  venus-data:
+    name: venus-data-dev

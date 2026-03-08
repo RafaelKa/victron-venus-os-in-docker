@@ -1,0 +1,116 @@
+# Build, test, and push Venus OS Docker image to ghcr.io on release tags.
+# Uses native ARM64 runner — no QEMU emulation needed.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+env:
+  MACHINE: raspberrypi5
+  FEED: release
+  IMAGE_REGISTRY: ghcr.io
+  IMAGE_OWNER: rafaelka
+  IMAGE_NAME: venus-os
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Version: $VERSION"
+
+      - name: Cache Venus OS image download
+        uses: actions/cache@v5
+        with:
+          path: build/downloads/
+          key: venus-image-${{ env.MACHINE }}-${{ env.FEED }}
+
+      - name: Download Venus OS image
+        run: |
+          chmod +x scripts/*.sh
+          sudo bash scripts/download-image.sh --machine "$MACHINE" --feed "$FEED"
+
+      - name: Extract rootfs
+        run: sudo bash scripts/extract-rootfs.sh --machine "$MACHINE"
+
+      - name: Modify rootfs for container
+        run: sudo bash scripts/modify-rootfs.sh --rootfs build/rootfs-staging --machine "$MACHINE"
+
+      - name: Package rootfs
+        run: sudo tar -cf build/output/rootfs.tar -C build/rootfs-staging .
+
+      - name: Build Docker image
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          docker build \
+            -f docker/Dockerfile \
+            -t "$IMAGE_REGISTRY/$IMAGE_OWNER/$IMAGE_NAME:v${VERSION}-$MACHINE" \
+            -t "$IMAGE_REGISTRY/$IMAGE_OWNER/$IMAGE_NAME:latest-$MACHINE" \
+            --build-arg ROOTFS_TAR=rootfs.tar \
+            build/output/
+
+      - name: Run tests
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          docker run -d \
+            --name venus-test \
+            --privileged \
+            "$IMAGE_REGISTRY/$IMAGE_OWNER/$IMAGE_NAME:v${VERSION}-$MACHINE"
+
+          echo "Waiting for Venus OS to initialize..."
+          sleep 20
+
+          chmod +x tests/*.sh
+          bash tests/run-all-tests.sh venus-test
+
+          docker stop venus-test && docker rm venus-test
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push Docker image
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          docker push "$IMAGE_REGISTRY/$IMAGE_OWNER/$IMAGE_NAME:v${VERSION}-$MACHINE"
+          docker push "$IMAGE_REGISTRY/$IMAGE_OWNER/$IMAGE_NAME:latest-$MACHINE"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          body: |
+            ## Venus OS Docker Image
+
+            **Machine:** `${{ env.MACHINE }}`
+            **Feed:** `${{ env.FEED }}`
+
+            ### Pull the image
+            ```bash
+            docker pull ghcr.io/${{ env.IMAGE_OWNER }}/${{ env.IMAGE_NAME }}:v${{ steps.version.outputs.version }}-${{ env.MACHINE }}
+            ```
+
+            ### Quick start
+            ```bash
+            docker run -d --privileged --network host \
+              -v venus-data:/data \
+              ghcr.io/${{ env.IMAGE_OWNER }}/${{ env.IMAGE_NAME }}:v${{ steps.version.outputs.version }}-${{ env.MACHINE }}
+            ```
