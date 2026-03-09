@@ -47,14 +47,14 @@ fi
 # causes portal ID mismatches in the GUI v2.
 
 mkdir -p /data/venus
-UNIQUE_ID=$(ip link show 2>/dev/null | grep -A1 -E "^[0-9]+:" | grep "link/ether" | head -1 | awk '{print $2}' | tr -d ':')
+UNIQUE_ID=$(ip link show 2>/dev/null | grep -A1 -E "^[0-9]+:" | grep "link/ether" | head -n 1 | awk '{print $2}' | tr -d ':')
 if [ -n "$UNIQUE_ID" ]; then
     echo "$UNIQUE_ID" > /data/venus/unique-id
     echo "[entrypoint] VRM unique ID: $UNIQUE_ID"
 else
     # MAC not available — keep existing file or write fallback
     if [ ! -f /data/venus/unique-id ]; then
-        head -c 12 /etc/machine-id > /data/venus/unique-id 2>/dev/null || echo "dockervenus0" > /data/venus/unique-id
+        read -r machine_id < /etc/machine-id && echo "${machine_id:0:12}" > /data/venus/unique-id 2>/dev/null || echo "dockervenus0" > /data/venus/unique-id
         echo "[entrypoint] VRM unique ID: fallback (no MAC detected)"
     else
         echo "[entrypoint] VRM unique ID: $(cat /data/venus/unique-id) (kept existing, no MAC detected)"

@@ -383,7 +383,7 @@ jobs:
 | **Kernel modules**     | Host kernel must provide them. Document required modules. `--privileged` gives access.                   |
 | **D-Bus isolation**    | Own D-Bus by default. Document host D-Bus sharing if needed (mount socket).                              |
 | **Network management** | Disable connman. Docker/host handles networking. `--net=host` for device discovery.                      |
-| **Image size**         | Single-layer build keeps it minimal. Consider slim variant later (no Node-RED/SignalK).                  |
+| **Image size**         | Single-layer build keeps it minimal. Standard and large variants like original Venus OS available.       |
 | **Extracting rootfs**  | Needs `losetup`/`mount` with root privileges. In CI: runs as root. Locally: `sudo` or `fakeroot`.        |
 
 ---
@@ -409,6 +409,7 @@ v{venus-version}-{build}    # e.g., v3.50-1, v3.50-2
 
 1. ~~**License**~~ → **GPL v3**. Venus OS is GPL, and we modify+redistribute the rootfs. All modifications must remain public.
 2. ~~**GitHub org/user**: What GitHub account hosts the repository?~~ → **RafaelKa** — repo: `github.com/RafaelKa/victron-venus-os-in-docker`, images: `ghcr.io/rafaelka/venus-os`
-3. **Venus version pinning**: Track latest release feed? Or pin specific versions?
-4. **Qt6 GUI**: Include in container by default? Needs display access (X11/Wayland socket passthrough). Maybe web-only by default, Qt GUI opt-in.
-5. **Image variants**: Just full image, or also a slim variant?
+3. ~~**Image variants**: Standard and large images like original Venus OS.~~
+4. Add bashunit tests for critical parts, which must be run inside of container/chroot. See: https://bashunit.typeddevs.com/quickstart 
+5. **Venus version pinning**: Track latest release feed? Or pin specific versions?
+6. **Qt6 GUI**: Include in container by default? Needs display access (X11/Wayland socket passthrough). Maybe web-only by default, Qt GUI opt-in.
