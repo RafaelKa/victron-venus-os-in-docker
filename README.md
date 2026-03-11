@@ -54,12 +54,10 @@ docker compose up -d
 
 ## Supported Platforms
 
-| Platform         | Architecture | Status    |
-|------------------|--------------|-----------|
-| Raspberry Pi 5   | aarch64      | Supported |
-| Raspberry Pi 4   | aarch64      | Planned   |
-| Raspberry Pi 2   | armv7        | Planned   |
-| BeagleBone Black | armv7        | Planned   |
+| Platform                        | Architecture | Status    | derived from |
+|---------------------------------|--------------|-----------|--------------|
+| Raspberry Pi 5 / 4 / 3(64bit)   | aarch64      | Supported | PI 5         |
+| Raspberry Pi 3 / 2 & co.(32bit) | armv7        | Planned   | Pi 2         |
 
 ## Configuration
 
