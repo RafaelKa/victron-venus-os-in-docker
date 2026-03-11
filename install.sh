@@ -9,8 +9,6 @@
 # Idempotent: re-running in an existing directory pre-fills from .env.
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/RafaelKa/victron-venus-os-in-docker/main/install.sh | bash
-#   # or
 #   bash install.sh
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
@@ -612,7 +610,6 @@ services:
     image: ${DOCKER_IMAGE}
     container_name: ${INSTANCE_NAME}
     mac_address: "${STABLE_MAC}"
-    privileged: true
     restart: unless-stopped
 ${ports_yaml}
     volumes:

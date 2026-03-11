@@ -13,14 +13,14 @@ Control Venus OS behavior at container startup via environment variables.
 | `VENUS_DISABLE_NGINX` | `0`     | Set to `1` to disable the web server. No web GUI will be available.                                                      |
 | `VENUS_DISABLE_SSH`   | `0`     | Set to `1` to disable the SSH server inside the container.                                                               |
 
-### Bluetooth Auto-Detection
+### Bluetooth Auto-Detection: **Does not work for now.**
 
 Bluetooth is enabled automatically when a Bluetooth HCI adapter is available inside the container. No environment variable is needed.
 
 To pass a Bluetooth adapter into the container, add it to `devices:` in your `docker-compose.yml`:
 ```yaml
 devices:
-  - /dev/hci0:/dev/hci0
+  -TBD:TBD
 ```
 
 The entrypoint checks for `/sys/class/bluetooth/hci*` at startup and enables Bluetooth services (`start-bluetooth`, `bluetooth`, `vesmart-server`, `dbus-ble-sensors`) if an adapter is present.
