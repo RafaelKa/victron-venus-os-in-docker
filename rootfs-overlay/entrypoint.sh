@@ -9,6 +9,15 @@
 #   VENUS_DISABLE_MQTT=1      — Disable MQTT broker and bridge
 #   VENUS_DISABLE_NGINX=1     — Disable the web server
 #   VENUS_DISABLE_SSH=1       — Disable SSH server
+#   VENUS_DEVICES=...         — Comma-separated serial device mappings
+#
+# Example:
+#   VENUS_DEVICES=/dev/ttyUSB0:mkx,/dev/ttyUSB1:vedirect
+#
+# Supported device services:
+#   mkx                MK3-USB interface
+#   vedirect           Victron VE.Direct USB cable
+#   vedirect:default   Generic FT232EX VE.Direct interface
 #
 # Bluetooth is auto-detected: if an HCI adapter is available inside the
 # container (passed via devices: in docker-compose.yml), Bluetooth services
@@ -202,16 +211,150 @@ else
     echo "[entrypoint] No Bluetooth adapter detected — BT services stay disabled."
 fi
 
-# ── Log serial devices ───────────────────────────────────────────────────────
+# ── Set up Venus serial devices ──────────────────────────────────────────────
+#
+# Venus OS normally relies on udev rules to:
+#
+#   1. Add ID_BUS, ID_MODEL and VE_SERVICE properties.
+#   2. Create /dev/serial-starter/<device> symlinks.
+#
+# udevd is not running inside the container, so reproduce those two effects
+# from the VENUS_DEVICES environment variable.
+#
+# Example:
+#
+#   VENUS_DEVICES=/dev/ttyUSB0:mkx,/dev/ttyUSB1:vedirect
+#
 
-if [ -d /dev/serial/by-id ] && [ -n "$(ls -A /dev/serial/by-id/ 2>/dev/null)" ]; then
-    echo "[entrypoint] Serial devices available:"
-    for dev in /dev/serial/by-id/*; do
-        real_dev=$(readlink -f "$dev" 2>/dev/null || echo "$dev")
-        echo "[entrypoint]   $(basename "$dev") -> $real_dev"
+setup_venus_device() {
+    dev=$1
+    requested_service=$2
+
+    # Remove whitespace around values.
+    dev=$(printf '%s' "$dev" | tr -d '[:space:]')
+    requested_service=$(printf '%s' "$requested_service" | tr -d '[:space:]')
+
+    if [ -z "$dev" ] || [ -z "$requested_service" ]; then
+        echo "[entrypoint] WARNING: Invalid VENUS_DEVICES entry"
+        return 0
+    fi
+
+    if [ ! -c "$dev" ]; then
+        echo "[entrypoint] WARNING: $dev does not exist or is not a character device"
+        return 0
+    fi
+
+    case "$requested_service" in
+        mkx)
+            id_model="MK3-USB_Interface"
+            ve_service="mkx"
+            ;;
+
+        vedirect)
+            id_model="VE_Direct_cable"
+            ve_service="vedirect"
+            ;;
+
+        vedirect:default)
+            id_model="FT232EX"
+            ve_service="vedirect:default"
+            ;;
+
+        *)
+            echo "[entrypoint] WARNING: Unsupported Venus service '$requested_service' for $dev"
+            return 0
+            ;;
+    esac
+
+    device_name=$(basename "$dev")
+
+    # GNU stat returns decimal major and minor device numbers with these
+    # format specifiers. For ttyUSB0 this normally produces 188 and 0.
+    major=$(udevadm info -q property -n "$dev" | sed -n 's/^MAJOR=//p')
+    minor=$(udevadm info -q property -n "$dev" | sed -n 's/^MINOR=//p')
+
+    if [ -z "$major" ] || [ -z "$minor" ]; then
+        echo "[entrypoint] WARNING: Cannot determine major/minor numbers for $dev"
+        return 0
+    fi
+
+    udev_database="/run/udev/data/c${major}:${minor}"
+    serial_link="/dev/serial-starter/$device_name"
+
+    mkdir -p /run/udev/data
+    mkdir -p /dev/serial-starter
+
+    # Populate the properties used by serial-starter.
+    #
+    # DEVNAME, DEVPATH, MAJOR, MINOR and SUBSYSTEM are obtained directly
+    # from sysfs by udevadm and do not need to be added here.
+    cat > "$udev_database" <<EOF
+E:ID_BUS=usb
+E:ID_MODEL=$id_model
+E:VE_SERVICE=$ve_service
+EOF
+
+    # Reproduce:
+    #
+    #   SYMLINK+="serial-starter/%k"
+    #
+    # Use a relative target, matching normal /dev symlink conventions.
+    ln -sfn "../$device_name" "$serial_link"
+
+    echo "[entrypoint] Venus serial device configured:"
+    echo "[entrypoint]   Device:  $dev"
+    echo "[entrypoint]   Link:    $serial_link -> ../$device_name"
+    echo "[entrypoint]   Model:   $id_model"
+    echo "[entrypoint]   Service: $ve_service"
+    echo "[entrypoint]   udev DB: $udev_database"
+}
+
+setup_venus_devices() {
+    if [ -z "${VENUS_DEVICES:-}" ]; then
+        echo "[entrypoint] No Venus serial devices configured."
+        return 0
+    fi
+
+    venus_devices=$VENUS_DEVICES
+
+    # Be tolerant of values accidentally configured with literal quotes:
+    #
+    #   VENUS_DEVICES="/dev/ttyUSB0:vedirect"
+    #
+    # The Compose configuration should ideally omit those literal quotes.
+    venus_devices=$(printf '%s' "$venus_devices" | sed 's/^"//;s/"$//')
+
+    echo "[entrypoint] Setting up Venus serial devices..."
+
+    old_ifs=$IFS
+    IFS=','
+
+    for mapping in $venus_devices; do
+        dev=${mapping%%:*}
+        requested_service=${mapping#*:}
+
+        if [ "$dev" = "$mapping" ]; then
+            echo "[entrypoint] WARNING: Invalid VENUS_DEVICES entry '$mapping'"
+            continue
+        fi
+
+        setup_venus_device "$dev" "$requested_service"
     done
-else
-    echo "[entrypoint] No serial devices in /dev/serial/by-id/"
+
+    IFS=$old_ifs
+}
+
+setup_venus_devices
+
+# ── Initialize firmware version ───────────────────────────────────────────────
+# On normal Venus OS, /var/run/versions is populated during boot.
+# venus-platform uses this file for the firmware version shown in the GUI.
+
+if [ -f /opt/victronenergy/version ]; then
+    sed -n -e '1h;3{G;s/\n/ /p}' \
+        /opt/victronenergy/version > /var/run/versions
+
+    echo "[entrypoint] Firmware: $(cat /var/run/versions)"
 fi
 
 # ── Show service summary ──────────────────────────────────────────────────────
