@@ -346,6 +346,17 @@ setup_venus_devices() {
 
 setup_venus_devices
 
+# ── Initialize firmware version ───────────────────────────────────────────────
+# On normal Venus OS, /var/run/versions is populated during boot.
+# venus-platform uses this file for the firmware version shown in the GUI.
+
+if [ -f /opt/victronenergy/version ]; then
+    sed -n -e '1h;3{G;s/\n/ /p}' \
+        /opt/victronenergy/version > /var/run/versions
+
+    echo "[entrypoint] Firmware: $(cat /var/run/versions)"
+fi
+
 # ── Show service summary ──────────────────────────────────────────────────────
 
 TOTAL_SERVICES=$(find /service -maxdepth 1 -mindepth 1 -type d 2>/dev/null | wc -l)
